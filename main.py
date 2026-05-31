@@ -78,8 +78,8 @@ def collect():
         print(f"Error: {e}")
         sys.exit(1)
 
-def search(keyword):
-    """Search jobs by keyword in title and description"""
+def search(keywords):
+    """Search jobs by multiple keywords in title and description"""
     if not Path(JOBS_FILE).exists():
         print(f"Error: {JOBS_FILE} not found. Run 'python main.py collect' first.")
         sys.exit(1)
@@ -87,19 +87,29 @@ def search(keyword):
     with open(JOBS_FILE, 'r') as f:
         jobs = json.load(f)
     
-    keyword = keyword.lower()
+    # Convert keywords to lowercase
+    keywords_lower = [k.lower() for k in keywords]
     results = []
     
     for job in jobs:
         title = str(job.get('title', '')).lower()
         description = str(job.get('description', '')).lower()
+        content = title + ' ' + description
         
-        if keyword in title or keyword in description:
-            results.append(job)
+        # Count how many keywords match
+        matches = sum(1 for kw in keywords_lower if kw in content)
+        
+        # Only include jobs that match at least one keyword
+        if matches > 0:
+            results.append((matches, job))
     
-    print(f"\nFound {len(results)} job(s) matching '{keyword}':\n")
+    # Sort by matches (descending) for relevance ranking
+    results.sort(key=lambda x: x[0], reverse=True)
     
-    for i, job in enumerate(results[:10], 1):
+    keywords_str = ' '.join(keywords)
+    print(f"\nFound {len(results)} job(s) matching '{keywords_str}':\n")
+    
+    for i, (matches, job) in enumerate(results[:10], 1):
         title = job.get('title', 'N/A')
         link = job.get('link', 'N/A')
         description = job.get('description', 'N/A')
@@ -108,7 +118,8 @@ def search(keyword):
         if len(description) > 200:
             description = description[:200].rstrip() + '...'
         
-        print(f"{i}. {title}")
+        score = f"[{matches}/{len(keywords_lower)}]"
+        print(f"{i}. {score} {title}")
         print(f"   Link: {link}")
         if description != 'N/A':
             print(f"\n   Description:")
@@ -119,8 +130,8 @@ def main():
     if len(sys.argv) < 2:
         print("Job Finder - Find remote jobs")
         print("\nUsage:")
-        print("  python main.py collect          - Fetch jobs from RemoteOK API")
-        print("  python main.py search <keyword> - Search for jobs by keyword")
+        print("  python main.py collect                          - Fetch jobs from RSS feeds")
+        print("  python main.py search <keyword1> [keyword2] ... - Search for jobs by keywords")
         sys.exit(1)
     
     command = sys.argv[1]
@@ -129,9 +140,9 @@ def main():
         collect()
     elif command == "search":
         if len(sys.argv) < 3:
-            print("Usage: python main.py search <keyword>")
+            print("Usage: python main.py search <keyword1> [keyword2] ...")
             sys.exit(1)
-        search(sys.argv[2])
+        search(sys.argv[2:])
     else:
         print(f"Unknown command: {command}")
         sys.exit(1)
