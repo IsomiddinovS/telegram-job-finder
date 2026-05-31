@@ -1,20 +1,44 @@
 import json
 import sys
 import requests
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 JOBS_FILE = "jobs.json"
 
 def collect():
-    """Fetch jobs from RemoteOK API and save to jobs.json"""
-    print("Collecting jobs from RemoteOK API...")
+    """Fetch jobs from RSS feeds and save to jobs.json"""
+    print("Collecting jobs from RSS feeds...")
     try:
-        response = requests.get("https://remoteok.io/api")
-        response.raise_for_status()
-        jobs = response.json()
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
         
-        # Filter out non-job items (API returns metadata at index 0)
-        jobs = [j for j in jobs if isinstance(j, dict) and 'title' in j]
+        feeds = [
+            "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+            "https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss"
+        ]
+        
+        jobs = []
+        
+        for feed_url in feeds:
+            response = requests.get(feed_url, headers=headers, timeout=15)
+            response.raise_for_status()
+            
+            # Parse RSS/XML feed
+            root = ET.fromstring(response.content)
+            
+            # Extract items from RSS feed
+            for item in root.findall('.//item'):
+                title = item.findtext('title', 'N/A')
+                link = item.findtext('link', 'N/A')
+                description = item.findtext('description', 'N/A')
+                
+                jobs.append({
+                    'title': title,
+                    'link': link,
+                    'description': description
+                })
         
         with open(JOBS_FILE, 'w') as f:
             json.dump(jobs, f, indent=2)
@@ -25,7 +49,7 @@ def collect():
         sys.exit(1)
 
 def search(keyword):
-    """Search jobs by keyword in title, description, and tags"""
+    """Search jobs by keyword in title and description"""
     if not Path(JOBS_FILE).exists():
         print(f"Error: {JOBS_FILE} not found. Run 'python main.py collect' first.")
         sys.exit(1)
@@ -39,17 +63,16 @@ def search(keyword):
     for job in jobs:
         title = str(job.get('title', '')).lower()
         description = str(job.get('description', '')).lower()
-        tags = str(job.get('tag', '')).lower()
         
-        if keyword in title or keyword in description or keyword in tags:
+        if keyword in title or keyword in description:
             results.append(job)
     
     print(f"\nFound {len(results)} job(s) matching '{keyword}':\n")
     
     for i, job in enumerate(results[:10], 1):
         print(f"{i}. {job.get('title', 'N/A')}")
-        print(f"   Company: {job.get('company', 'N/A')}")
-        print(f"   Tags: {job.get('tag', 'N/A')}")
+        print(f"   Link: {job.get('link', 'N/A')}")
+        print(f"   Description: {job.get('description', 'N/A')[:100]}...")
         print()
 
 def main():
