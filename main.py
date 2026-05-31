@@ -3,8 +3,35 @@ import sys
 import requests
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from html.parser import HTMLParser
 
 JOBS_FILE = "jobs.json"
+
+class HTMLStripper(HTMLParser):
+    """Remove HTML tags from text"""
+    def __init__(self):
+        super().__init__()
+        self.reset()
+        self.strict = False
+        self.convert_charrefs = True
+        self.text = []
+    
+    def handle_data(self, data):
+        self.text.append(data)
+    
+    def get_data(self):
+        return ' '.join(self.text).strip()
+
+def strip_html(html_text):
+    """Strip HTML tags from text"""
+    if not html_text or html_text == 'N/A':
+        return html_text
+    try:
+        stripper = HTMLStripper()
+        stripper.feed(html_text)
+        return stripper.get_data()
+    except:
+        return html_text
 
 def collect():
     """Fetch jobs from RSS feeds and save to jobs.json"""
@@ -33,6 +60,9 @@ def collect():
                 title = item.findtext('title', 'N/A')
                 link = item.findtext('link', 'N/A')
                 description = item.findtext('description', 'N/A')
+                
+                # Strip HTML tags from description
+                description = strip_html(description)
                 
                 jobs.append({
                     'title': title,
@@ -70,9 +100,19 @@ def search(keyword):
     print(f"\nFound {len(results)} job(s) matching '{keyword}':\n")
     
     for i, job in enumerate(results[:10], 1):
-        print(f"{i}. {job.get('title', 'N/A')}")
-        print(f"   Link: {job.get('link', 'N/A')}")
-        print(f"   Description: {job.get('description', 'N/A')[:100]}...")
+        title = job.get('title', 'N/A')
+        link = job.get('link', 'N/A')
+        description = job.get('description', 'N/A')
+        
+        # Limit description to 200 characters
+        if len(description) > 200:
+            description = description[:200].rstrip() + '...'
+        
+        print(f"{i}. {title}")
+        print(f"   Link: {link}")
+        if description != 'N/A':
+            print(f"\n   Description:")
+            print(f"   {description}")
         print()
 
 def main():
